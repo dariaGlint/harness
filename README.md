@@ -1,1 +1,62 @@
-# harness
+# production-harness
+
+Reusable, fail-closed primitives for long-running production workflows.
+
+This repository starts with the generic continuation layer extracted from the
+Chaos project's Mandatory Workflow Foreground Supervisor. It intentionally does
+not contain Chaos stages, game rules, repository names, Godot scene paths, or
+project-specific quality gates.
+
+## Included in v0.1
+
+- atomic JSON state writes with file and directory `fsync`;
+- discovery of the latest unfinished task;
+- bounded foreground continuation for exit codes `10` and `40`;
+- process-group termination and durable-state timeout recovery;
+- fail-closed handling for unknown exit codes;
+- deterministic retry chunk shrinking;
+- a shell-free argument-vector command template;
+- unit tests that do not require Godot or a private repository.
+
+## Library example
+
+```python
+from pathlib import Path
+
+from production_harness import CommandTemplate, ForegroundRequest, run_until_boundary
+
+request = ForegroundRequest(
+    operation="start",
+    cwd=Path.cwd(),
+    state_root=Path("validation_output/workflow_state"),
+    task_id="example-task",
+    command_template=CommandTemplate((
+        "python",
+        "workflow.py",
+        "{operation}",
+        "--task-id",
+        "{task_id}",
+        "--time-budget",
+        "{invocation_time_budget}",
+    )),
+)
+
+raise SystemExit(run_until_boundary(request))
+```
+
+The command is executed directly without a shell. Supported placeholders are
+`{operation}`, `{task_id}`, and `{invocation_time_budget}`.
+
+## Development
+
+```bash
+PYTHONPATH=src python -m unittest discover -s tests -v
+PYTHONPATH=src python -m compileall -q src tests
+PYTHONPATH=src python -m production_harness.cli --help
+```
+
+## Scope boundary
+
+The public package owns generic state durability, retry policy, and continuation
+control. A consuming project owns its workflow state machine, task schema,
+quality gates, publication rules, repository integration, and domain adapters.
