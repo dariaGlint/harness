@@ -5,11 +5,14 @@ import json
 import os
 import tempfile
 from pathlib import Path
-from typing import Any, Mapping, AbstractSet
+from typing import AbstractSet, Any, Callable, Mapping
 
 
 class StateError(RuntimeError):
     """Raised when durable state cannot be resolved safely."""
+
+
+StateValidator = Callable[[Mapping[str, Any]], bool]
 
 
 def atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
@@ -31,6 +34,9 @@ def atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
             return
         try:
             os.fsync(directory_fd)
+        except OSError:
+            # Some filesystems and Windows do not support directory fsync.
+            pass
         finally:
             os.close(directory_fd)
     finally:
@@ -46,13 +52,38 @@ def load_json_object(path: Path) -> dict[str, Any] | None:
     return value if isinstance(value, dict) else None
 
 
+def load_valid_state_object(
+    path: Path,
+    *,
+    validator: StateValidator | None = None,
+) -> dict[str, Any] | None:
+    """Load a durable state object and apply an optional fail-closed validator."""
+    state = load_json_object(path)
+    if state is None:
+        return None
+    if validator is None:
+        return state
+    try:
+        accepted = validator(state)
+    except Exception as exc:  # pragma: no cover - defensive contract boundary
+        raise StateError(f"State validator failed for {path}: {exc}") from exc
+    return state if accepted else None
+
+
 def latest_unfinished_task_id(
     state_root: Path,
     *,
     terminal_machine_states: AbstractSet[str],
     state_filename: str = "state.json",
+    machine_state_key: str = "machine_state",
+    validator: StateValidator | None = None,
 ) -> str:
-    """Return the most recently modified non-terminal task directory."""
+    """Return the most recently modified valid, non-terminal task directory."""
+    if not state_filename:
+        raise StateError("state_filename must not be empty")
+    if not machine_state_key:
+        raise StateError("machine_state_key must not be empty")
+
     candidates: list[tuple[float, str]] = []
     root = Path(state_root)
     if root.is_dir():
@@ -60,10 +91,13 @@ def latest_unfinished_task_id(
             state_path = directory / state_filename
             if not state_path.is_file():
                 continue
-            state = load_json_object(state_path)
-            if not state:
+            state = load_valid_state_object(state_path, validator=validator)
+            if state is None:
                 continue
-            if state.get("machine_state") in terminal_machine_states:
+            machine_state = state.get(machine_state_key)
+            if not isinstance(machine_state, str) or not machine_state:
+                continue
+            if machine_state in terminal_machine_states:
                 continue
             candidates.append((state_path.stat().st_mtime, directory.name))
     if not candidates:

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import signal
+import string
 import subprocess
 import sys
 import time
@@ -11,7 +12,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
-from .state import StateError, atomic_write_json, latest_unfinished_task_id
+from .report import REPORT_SCHEMA_VERSION, command_template_sha256
+from .state import (
+    StateError,
+    StateValidator,
+    atomic_write_json,
+    latest_unfinished_task_id,
+    load_valid_state_object,
+)
 
 EXIT_COMPLETE = 0
 EXIT_NOT_READY = 2
@@ -35,6 +43,7 @@ DEFAULT_TERMINAL_MACHINE_STATES = frozenset(
         "UNRECOVERABLE",
     }
 )
+_ALLOWED_TEMPLATE_FIELDS = frozenset({"operation", "task_id", "invocation_time_budget"})
 
 
 class ForegroundSupervisorError(RuntimeError):
@@ -55,16 +64,34 @@ class CommandTemplate:
 
     arguments: tuple[str, ...]
 
+    def __post_init__(self) -> None:
+        if not self.arguments:
+            raise ForegroundSupervisorError("command_template must not be empty")
+        formatter = string.Formatter()
+        for argument in self.arguments:
+            try:
+                parsed = formatter.parse(argument)
+                for _literal, field_name, format_spec, conversion in parsed:
+                    if field_name is None:
+                        continue
+                    if field_name not in _ALLOWED_TEMPLATE_FIELDS:
+                        raise ForegroundSupervisorError(
+                            f"Unknown command placeholder: {field_name}"
+                        )
+                    if format_spec or conversion:
+                        raise ForegroundSupervisorError(
+                            f"Command placeholder formatting is not supported: {field_name}"
+                        )
+            except ValueError as exc:
+                raise ForegroundSupervisorError(f"Invalid command template argument: {exc}") from exc
+
     def render(self, *, operation: str, task_id: str, time_budget: float) -> list[str]:
         values = {
             "operation": operation,
             "task_id": task_id,
             "invocation_time_budget": f"{time_budget:.3f}",
         }
-        try:
-            return [argument.format_map(values) for argument in self.arguments]
-        except KeyError as exc:
-            raise ForegroundSupervisorError(f"Unknown command placeholder: {exc.args[0]}") from exc
+        return [argument.format_map(values) for argument in self.arguments]
 
 
 @dataclass(frozen=True)
@@ -80,11 +107,15 @@ class ForegroundRequest:
     reserve_seconds: float = 1.5
     report_path: Path | None = None
     state_filename: str = "state.json"
+    state_machine_key: str = "machine_state"
+    state_validator: StateValidator | None = None
     continuation_codes: frozenset[int] = field(default_factory=lambda: DEFAULT_CONTINUATION_CODES)
     terminal_codes: frozenset[int] = field(default_factory=lambda: DEFAULT_TERMINAL_CODES)
     terminal_machine_states: frozenset[str] = field(
         default_factory=lambda: DEFAULT_TERMINAL_MACHINE_STATES
     )
+    # This value is persisted verbatim only when yielded. Callers must provide a
+    # pre-redacted command that contains no credentials or other secrets.
     next_command: tuple[str, ...] | None = None
 
 
@@ -95,20 +126,57 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _terminate_process_group(process: subprocess.Popen[str], grace_seconds: float = 0.5) -> None:
-    try:
-        os.killpg(process.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        return
+def _popen_process_group_options(platform: str = os.name) -> dict[str, Any]:
+    if platform == "nt":
+        creation_flag = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", None)
+        if creation_flag is None:
+            raise ForegroundSupervisorError("Windows process-group support is unavailable")
+        return {"creationflags": creation_flag}
+    return {"start_new_session": True}
+
+
+def _terminate_process_group(
+    process: subprocess.Popen[str],
+    grace_seconds: float = 0.5,
+    *,
+    platform: str = os.name,
+) -> None:
+    if platform == "nt":
+        ctrl_break = getattr(signal, "CTRL_BREAK_EVENT", None)
+        signalled = False
+        if ctrl_break is not None:
+            try:
+                process.send_signal(ctrl_break)
+                signalled = True
+            except (OSError, ValueError):
+                pass
+        if not signalled:
+            try:
+                process.terminate()
+            except OSError:
+                return
+    else:
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            return
+
     try:
         process.wait(timeout=max(0.05, grace_seconds))
         return
     except subprocess.TimeoutExpired:
         pass
-    try:
-        os.killpg(process.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        return
+
+    if platform == "nt":
+        try:
+            process.kill()
+        except OSError:
+            return
+    else:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            return
     try:
         process.wait(timeout=max(0.05, grace_seconds))
     except subprocess.TimeoutExpired:
@@ -121,7 +189,7 @@ def run_child(
     timeout_seconds: float,
     env: Mapping[str, str] | None = None,
 ) -> ChildResult:
-    """Run a child in its own process group and convert timeout to continuation."""
+    """Run a child in a new process group and convert timeout to a timed-out result."""
     process = subprocess.Popen(
         list(command),
         cwd=cwd,
@@ -130,8 +198,8 @@ def run_child(
         stderr=subprocess.PIPE,
         encoding="utf-8",
         errors="replace",
-        start_new_session=True,
         env=dict(env) if env is not None else None,
+        **_popen_process_group_options(),
     )
     try:
         stdout, stderr = process.communicate(timeout=max(0.1, timeout_seconds))
@@ -141,12 +209,16 @@ def run_child(
         stdout, stderr = process.communicate()
         detail = f"PRODUCTION_HARNESS_CHILD_TIMEOUT after {timeout_seconds:.3f}s"
         stderr = (stderr.rstrip() + "\n" + detail + "\n").lstrip("\n")
+        # Timeout is represented separately. run_until_boundary decides whether
+        # durable state permits resumption, independent of project exit codes.
         return ChildResult(EXIT_CONTINUE, stdout, stderr, True)
 
 
 def _validate_request(request: ForegroundRequest) -> None:
     if request.operation not in {"start", "resume", "resume-latest"}:
         raise ForegroundSupervisorError(f"Unsupported operation: {request.operation}")
+    if request.operation != "resume-latest" and not request.task_id:
+        raise ForegroundSupervisorError(f"{request.operation} requires a task_id")
     if request.outer_time_budget <= 0:
         raise ForegroundSupervisorError("outer_time_budget must be positive")
     if request.invocation_time_budget <= 0:
@@ -155,8 +227,10 @@ def _validate_request(request: ForegroundRequest) -> None:
         raise ForegroundSupervisorError("max_invocations must be positive")
     if request.reserve_seconds < 0:
         raise ForegroundSupervisorError("reserve_seconds must not be negative")
-    if not request.command_template.arguments:
-        raise ForegroundSupervisorError("command_template must not be empty")
+    if not request.state_filename:
+        raise ForegroundSupervisorError("state_filename must not be empty")
+    if not request.state_machine_key:
+        raise ForegroundSupervisorError("state_machine_key must not be empty")
     if request.continuation_codes & request.terminal_codes:
         raise ForegroundSupervisorError("continuation_codes and terminal_codes must not overlap")
 
@@ -190,6 +264,8 @@ def run_until_boundary(
                 request.state_root,
                 terminal_machine_states=request.terminal_machine_states,
                 state_filename=request.state_filename,
+                machine_state_key=request.state_machine_key,
+                validator=request.state_validator,
             )
         except StateError as exc:
             raise ForegroundSupervisorError(str(exc)) from exc
@@ -205,21 +281,32 @@ def run_until_boundary(
     terminal_reason = "not_started"
 
     def task_state_exists() -> bool:
-        return (request.state_root / task_id / request.state_filename).is_file()
+        state_path = request.state_root / task_id / request.state_filename
+        try:
+            state = load_valid_state_object(state_path, validator=request.state_validator)
+        except StateError as exc:
+            raise ForegroundSupervisorError(str(exc)) from exc
+        if state is None:
+            return False
+        machine_state = state.get(request.state_machine_key)
+        return isinstance(machine_state, str) and bool(machine_state)
 
     def write_report(status: str) -> None:
         atomic_write_json(
             report_path,
             {
-                "schema_version": 1,
+                "schema_version": REPORT_SCHEMA_VERSION,
                 "task_id": task_id,
                 "status": status,
                 "terminal_reason": terminal_reason,
                 "last_exit_code": last_exit_code,
                 "invocation_count": len(invocations),
                 "continuation_count": sum(
-                    1 for item in invocations if item["returncode"] in request.continuation_codes
+                    1
+                    for item in invocations
+                    if not item["timed_out"] and item["returncode"] in request.continuation_codes
                 ),
+                "timed_out_count": sum(1 for item in invocations if item["timed_out"]),
                 "outer_time_budget": request.outer_time_budget,
                 "invocation_time_budget": request.invocation_time_budget,
                 "max_invocations": request.max_invocations,
@@ -228,9 +315,14 @@ def run_until_boundary(
                 "elapsed_seconds": max(0.0, clock() - started_clock),
                 "cwd": str(request.cwd),
                 "state_root": str(request.state_root),
-                "command_template": list(request.command_template.arguments),
+                "state_filename": request.state_filename,
+                "state_machine_key": request.state_machine_key,
+                "command_template_sha256": command_template_sha256(request.command_template.arguments),
+                "command_argument_count": len(request.command_template.arguments),
                 "invocations": invocations,
-                "next_command": list(request.next_command) if status == "yielded" and request.next_command else None,
+                "next_command": list(request.next_command)
+                if status == "yielded" and request.next_command
+                else None,
             },
         )
 
@@ -277,11 +369,16 @@ def run_until_boundary(
             }
         )
 
-        if result.timed_out and not task_state_exists():
-            terminal_reason = "child_timed_out_before_state_creation"
-            last_exit_code = EXIT_UNRECOVERABLE
-            write_report("terminal")
-            return EXIT_UNRECOVERABLE
+        if result.timed_out:
+            if not task_state_exists():
+                terminal_reason = "child_timed_out_without_valid_state"
+                last_exit_code = EXIT_UNRECOVERABLE
+                write_report("terminal")
+                return EXIT_UNRECOVERABLE
+            operation = "resume"
+            terminal_reason = "child_timed_out_with_valid_state"
+            write_report("running")
+            continue
 
         if result.returncode in request.continuation_codes:
             operation = "resume"

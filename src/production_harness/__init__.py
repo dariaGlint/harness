@@ -14,8 +14,22 @@ from .foreground import (
     run_child,
     run_until_boundary,
 )
+from .report import (
+    REPORT_SCHEMA_VERSION,
+    command_template_sha256,
+    foreground_report_schema_path,
+    load_foreground_report_schema,
+    load_task_state_envelope_schema,
+)
 from .retry import RetryPolicy
-from .state import StateError, atomic_write_json, latest_unfinished_task_id, load_json_object
+from .state import (
+    StateError,
+    StateValidator,
+    atomic_write_json,
+    latest_unfinished_task_id,
+    load_json_object,
+    load_valid_state_object,
+)
 
 __all__ = [
     "EXIT_AWAITING_USER_APPROVAL",
@@ -25,15 +39,22 @@ __all__ = [
     "EXIT_NOT_READY",
     "EXIT_RETRY",
     "EXIT_UNRECOVERABLE",
+    "REPORT_SCHEMA_VERSION",
     "ChildResult",
     "CommandTemplate",
     "ForegroundRequest",
     "ForegroundSupervisorError",
     "RetryPolicy",
     "StateError",
+    "StateValidator",
     "atomic_write_json",
+    "command_template_sha256",
+    "foreground_report_schema_path",
     "latest_unfinished_task_id",
+    "load_foreground_report_schema",
     "load_json_object",
+    "load_task_state_envelope_schema",
+    "load_valid_state_object",
     "run_child",
     "run_until_boundary",
 ]

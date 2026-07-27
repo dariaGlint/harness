@@ -9,16 +9,95 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12"]
+        include:
+          - os: ubuntu-latest
+            python-version: "3.11"
+          - os: ubuntu-latest
+            python-version: "3.12"
+          - os: windows-latest
+            python-version: "3.12"
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - run: PYTHONPATH=src python -m unittest discover -s tests -v
-      - run: PYTHONPATH=src python -m compileall -q src tests
-      - run: PYTHONPATH=src python -m production_harness.cli --help
+      - name: Test state contracts
+        run: python -m unittest discover -s tests -p "test_state.py" -v
+        env:
+          PYTHONPATH: src
+      - name: Test retry policy
+        if: always()
+        run: python -m unittest discover -s tests -p "test_retry.py" -v
+        env:
+          PYTHONPATH: src
+      - name: Test report contracts
+        if: always()
+        run: python -m unittest discover -s tests -p "test_report.py" -v
+        env:
+          PYTHONPATH: src
+      - name: Test command template validation
+        if: always()
+        run: python tests/test_foreground.py -v ForegroundTests.test_command_template_rejects_unknown_or_formatted_placeholders
+        env:
+          PYTHONPATH: src
+      - name: Test continuation sequence
+        if: always()
+        run: python tests/test_foreground.py -v ForegroundTests.test_continues_10_then_40_then_completes
+        env:
+          PYTHONPATH: src
+      - name: Test max invocation yield
+        if: always()
+        run: python tests/test_foreground.py -v ForegroundTests.test_max_invocations_yields
+        env:
+          PYTHONPATH: src
+      - name: Test resume latest pinning
+        if: always()
+        run: python tests/test_foreground.py -v ForegroundTests.test_resume_latest_pins_one_valid_task
+        env:
+          PYTHONPATH: src
+      - name: Test unexpected exit fail closed
+        if: always()
+        run: python tests/test_foreground.py -v ForegroundTests.test_unexpected_exit_code_fails_closed
+        env:
+          PYTHONPATH: src
+      - name: Test foreground state recovery
+        if: always()
+        run: >-
+          python tests/test_foreground.py -v
+          ForegroundTests.test_timeout_before_state_is_unrecoverable
+          ForegroundTests.test_timeout_with_corrupt_state_is_unrecoverable
+          ForegroundTests.test_timeout_with_missing_machine_state_is_unrecoverable
+          ForegroundTests.test_timeout_with_validator_rejected_state_is_unrecoverable
+          ForegroundTests.test_timeout_with_valid_state_resumes_independent_of_exit_code_policy
+        env:
+          PYTHONPATH: src
+      - name: Test foreground report contract
+        if: always()
+        run: >-
+          python tests/test_foreground.py -v
+          ForegroundTests.test_report_matches_packaged_contract_and_redacts_template
+        env:
+          PYTHONPATH: src
+      - name: Test foreground process recovery
+        if: always()
+        run: >-
+          python tests/test_foreground.py -v
+          ForegroundTests.test_process_group_options_match_current_platform
+          ForegroundTests.test_real_child_timeout_is_reaped
+          ForegroundTests.test_sigterm_resistant_child_is_force_killed
+        env:
+          PYTHONPATH: src
+      - name: Compile package and tests
+        if: always()
+        run: python -m compileall -q src tests
+        env:
+          PYTHONPATH: src
+      - name: Load CLI
+        if: always()
+        run: python -m production_harness.cli --help
+        env:
+          PYTHONPATH: src

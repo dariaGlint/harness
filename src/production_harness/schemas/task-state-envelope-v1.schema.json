@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dariaGlint/harness/schemas/task-state-envelope-v1.schema.json",
+  "title": "Production Harness Default Task State Envelope v1",
+  "type": "object",
+  "required": ["machine_state"],
+  "properties": {
+    "machine_state": {"type": "string", "minLength": 1}
+  },
+  "additionalProperties": true
+}
