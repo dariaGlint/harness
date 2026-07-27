@@ -58,12 +58,24 @@ semantics, and compatibility rules are documented in
 The report stores a digest of the command template rather than raw arguments.
 Any `next_command` supplied by a consumer must already be redacted.
 
+## Release evidence
+
+`examples/consumer_fixture.py` is executed from an isolated virtual environment
+containing only the built wheel. The validation script rejects source-tree
+imports before exercising a real `start -> resume -> complete` flow.
+
+Release publication steps are defined in
+[`docs/release-checklist.md`](docs/release-checklist.md), and release notes are
+maintained in [`CHANGELOG.md`](CHANGELOG.md).
+
 ## Development
 
 ```bash
 PYTHONPATH=src python -m unittest discover -s tests -v
 PYTHONPATH=src python -m compileall -q src tests
 PYTHONPATH=src python -m production_harness.cli --help
+python -m pip wheel . --no-deps --no-build-isolation --wheel-dir dist
+python scripts/validate_installed_wheel.py
 ```
 
 ## Scope boundary
