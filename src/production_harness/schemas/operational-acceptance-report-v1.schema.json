@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dariaGlint/harness/schemas/operational-acceptance-report-v1.schema.json",
+  "title": "production-harness operational acceptance report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "contract_sha256", "subject_id", "conformance_status", "task_verdict", "ordered_results", "missing_required_gates", "failed_gates", "blocked_required_gates", "skipped_required_gates", "report_sha256"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "operational_acceptance_report"},
+    "contract_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "subject_id": {"type": "string", "minLength": 1, "maxLength": 256},
+    "conformance_status": {"const": "pass"},
+    "task_verdict": {"enum": ["PASS", "FAIL", "BLOCKED"]},
+    "ordered_results": {"type": "array"},
+    "missing_required_gates": {"type": "array", "items": {"type": "string"}},
+    "failed_gates": {"type": "array", "items": {"type": "string"}},
+    "blocked_required_gates": {"type": "array", "items": {"type": "string"}},
+    "skipped_required_gates": {"type": "array", "items": {"type": "string"}},
+    "report_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

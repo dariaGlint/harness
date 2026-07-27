@@ -8,11 +8,16 @@ from pathlib import Path
 
 import production_harness
 from production_harness import (
+    ACCEPTANCE_SCHEMA_VERSION,
     EXIT_COMPLETE,
     LEDGER_SCHEMA_VERSION,
+    AcceptanceGate,
     CommandTemplate,
     ForegroundRequest,
     append_ledger_event,
+    build_acceptance_contract,
+    build_gate_result,
+    evaluate_acceptance,
     run_until_boundary,
     verify_ledger,
 )
@@ -84,6 +89,17 @@ def main() -> int:
     if LEDGER_SCHEMA_VERSION != 1:
         raise RuntimeError("Evidence Ledger public schema version is unavailable")
 
+    acceptance_schema_text = (
+        importlib.resources.files("production_harness.schemas")
+        .joinpath("operational-acceptance-contract-v1.schema.json")
+        .read_text(encoding="utf-8")
+    )
+    acceptance_schema = json.loads(acceptance_schema_text)
+    if acceptance_schema.get("properties", {}).get("schema_version", {}).get("const") != 1:
+        raise RuntimeError("Operational Acceptance packaged schema is unavailable")
+    if ACCEPTANCE_SCHEMA_VERSION != 1:
+        raise RuntimeError("Operational Acceptance public schema version is unavailable")
+
     with tempfile.TemporaryDirectory(prefix="production-harness-consumer-") as raw:
         root = Path(raw)
         worker = root / "consumer_worker.py"
@@ -148,6 +164,23 @@ def main() -> int:
         )
         if verification.event_count != 1:
             raise RuntimeError("installed Evidence Ledger verification failed")
+
+        contract = build_acceptance_contract(
+            subject_id=task_id,
+            gates=[AcceptanceGate("consumer-fixture")],
+        )
+        gate_result = build_gate_result(
+            contract,
+            gate_id="consumer-fixture",
+            status="pass",
+            reason="installed wheel fixture passed",
+        )
+        acceptance_report = evaluate_acceptance(contract, [gate_result])
+        if (
+            acceptance_report.conformance_status != "pass"
+            or acceptance_report.task_verdict != "PASS"
+        ):
+            raise RuntimeError("installed Operational Acceptance evaluation failed")
 
     print(f"external consumer fixture passed: {imported_path}")
     return 0

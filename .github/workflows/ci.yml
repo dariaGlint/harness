@@ -44,6 +44,11 @@ jobs:
         run: python -m unittest discover -s tests -p "test_evidence_ledger.py" -v
         env:
           PYTHONPATH: src
+      - name: Test operational acceptance
+        if: always()
+        run: python -m unittest discover -s tests -p "test_operational_acceptance*.py" -v
+        env:
+          PYTHONPATH: src
       - name: Test command template validation
         if: always()
         run: python tests/test_foreground.py -v ForegroundTests.test_command_template_rejects_unknown_or_formatted_placeholders
@@ -109,6 +114,11 @@ jobs:
       - name: Load Evidence Ledger CLI
         if: always()
         run: python -m production_harness.evidence_ledger_cli --help
+        env:
+          PYTHONPATH: src
+      - name: Load Operational Acceptance CLI
+        if: always()
+        run: python -m production_harness.operational_acceptance_cli --help
         env:
           PYTHONPATH: src
       - name: Install packaging toolchain

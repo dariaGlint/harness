@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dariaGlint/harness/schemas/operational-acceptance-gate-result-v1.schema.json",
+  "title": "production-harness operational acceptance gate result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "contract_sha256", "subject_id", "gate_id", "status", "reason", "evidence", "result_sha256"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "operational_acceptance_gate_result"},
+    "contract_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "subject_id": {"type": "string", "minLength": 1, "maxLength": 256},
+    "gate_id": {"type": "string", "pattern": "^[a-z][a-z0-9_.:-]{0,127}$"},
+    "status": {"enum": ["pass", "fail", "blocked", "skipped"]},
+    "reason": {"type": "string", "minLength": 1, "maxLength": 2048},
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["role", "path", "size_bytes", "sha256"],
+        "properties": {
+          "role": {"type": "string", "minLength": 1, "maxLength": 128},
+          "path": {"type": "string", "minLength": 1},
+          "size_bytes": {"type": "integer", "minimum": 0},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "result_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}
