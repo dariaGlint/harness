@@ -11,7 +11,10 @@ The format follows Keep a Changelog, and this project uses Semantic Versioning.
 - `Workspace Commit Bridge` library and CLI for checkpoint ZIP publication;
 - GitHub App installation-token compatible REST adapter;
 - packaged v1 handoff JSON Schema and contract documentation;
-- exact file operation, digest, tree, commit, branch, and compare verification.
+- exact file operation, digest, tree, commit, branch, and compare verification;
+- append-only Evidence Ledger library and CLI with canonical JSONL events;
+- packaged v1 Evidence Ledger event schema and installed-wheel validation;
+- trusted head snapshots for detecting complete trailing-record removal.
 
 ### Security
 
@@ -19,7 +22,9 @@ The format follows Keep a Changelog, and this project uses Semantic Versioning.
   expansion-ratio, size-limit, forbidden-artifact, and digest checks;
 - stale bases are rebased only when selected paths and direct dependencies are
   unchanged;
-- default branches and unrelated existing work branches are never overwritten.
+- default branches and unrelated existing work branches are never overwritten;
+- Evidence Ledger sequence, hash-chain, canonical encoding, lock, stale-writer,
+  symlink, evidence digest, and post-append rollback checks.
 
 ### Fixed
 

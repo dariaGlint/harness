@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.resources
 import json
 import sys
 import tempfile
@@ -8,9 +9,12 @@ from pathlib import Path
 import production_harness
 from production_harness import (
     EXIT_COMPLETE,
+    LEDGER_SCHEMA_VERSION,
     CommandTemplate,
     ForegroundRequest,
+    append_ledger_event,
     run_until_boundary,
+    verify_ledger,
 )
 
 
@@ -69,6 +73,17 @@ def main() -> int:
     if repository_root in imported_path.parents:
         raise RuntimeError(f"source-tree import detected: {imported_path}")
 
+    schema_text = (
+        importlib.resources.files("production_harness.schemas")
+        .joinpath("evidence-ledger-event-v1.schema.json")
+        .read_text(encoding="utf-8")
+    )
+    schema = json.loads(schema_text)
+    if schema.get("properties", {}).get("schema_version", {}).get("const") != 1:
+        raise RuntimeError("Evidence Ledger packaged schema is unavailable")
+    if LEDGER_SCHEMA_VERSION != 1:
+        raise RuntimeError("Evidence Ledger public schema version is unavailable")
+
     with tempfile.TemporaryDirectory(prefix="production-harness-consumer-") as raw:
         root = Path(raw)
         worker = root / "consumer_worker.py"
@@ -109,10 +124,30 @@ def main() -> int:
         if report.get("status") != "terminal":
             raise RuntimeError(f"unexpected report status: {report.get('status')}")
         if report.get("invocation_count") != 2:
-            raise RuntimeError(f"unexpected invocation count: {report.get('invocation_count')}")
+            raise RuntimeError(
+                f"unexpected invocation count: {report.get('invocation_count')}"
+            )
         operations = [item.get("operation") for item in report.get("invocations", [])]
         if operations != ["start", "resume"]:
             raise RuntimeError(f"unexpected operation sequence: {operations}")
+
+        ledger_path = root / "evidence-ledger.jsonl"
+        event = append_ledger_event(
+            ledger_path,
+            event_type="consumer.completed",
+            subject_id=task_id,
+            payload={"result": "PASS"},
+            expected_sequence=1,
+        )
+        verification = verify_ledger(
+            ledger_path,
+            expected_subject_id=task_id,
+            expected_event_count=1,
+            expected_last_hash=event.event_hash,
+            required_event_types=("consumer.completed",),
+        )
+        if verification.event_count != 1:
+            raise RuntimeError("installed Evidence Ledger verification failed")
 
     print(f"external consumer fixture passed: {imported_path}")
     return 0
