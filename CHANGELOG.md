@@ -4,6 +4,25 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog, and this project uses Semantic Versioning.
 
+## [Unreleased]
+
+### Added
+
+- `Workspace Commit Bridge` library and CLI for checkpoint ZIP publication;
+- GitHub App installation-token compatible REST adapter;
+- packaged v1 handoff and repository-policy JSON Schemas and contract documentation;
+- exact file operation, digest, tree, commit, branch, and compare verification;
+- repository-owned Issue Work Claim and canonical commit-message hook integration;
+- structured success/rejection results and Draft-only optional PR creation.
+
+### Security
+
+- checkpoint ZIP traversal, absolute-path, symlink, encryption, duplicate,
+  case-collision, expansion-ratio, size-limit, forbidden-artifact, UTF-8, and digest checks;
+- stale bases are rebased only when selected paths and direct dependencies are
+  unchanged;
+- default branches and unrelated existing work branches are never overwritten.
+
 ## [0.1.0] - 2026-07-27
 
 ### Added

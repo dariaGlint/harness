@@ -17,6 +17,7 @@ project-specific quality gates.
 - deterministic retry chunk shrinking that never increases work;
 - a shell-free, strictly validated argument-vector command template;
 - versioned packaged JSON Schemas for task state and foreground reports;
+- checkpoint ZIP publication through one validated Git tree and one commit;
 - Linux and Windows CI without Godot or private repository access.
 
 ## Library example
@@ -49,10 +50,34 @@ The command is executed directly without a shell. Supported placeholders are
 `{operation}`, `{task_id}`, and `{invocation_time_budget}`. Formatting,
 conversions, attribute access, and other placeholders are rejected.
 
+## Workspace Commit Bridge
+
+```python
+from production_harness import commit_checkpoint_to_github
+
+result = commit_checkpoint_to_github(
+    repository="owner/repository",
+    base_sha="0123456789abcdef0123456789abcdef01234567",
+    branch_name="agent/example-task",
+    commit_message="Add example task",
+    checkpoint_zip="checkpoint.zip",
+    handoff_json="handoff.json",
+    policy_json=".commit-bridge-policy.json",
+    create_pr=True,
+)
+```
+
+The bridge consumes file references, validates an exact handoff/ZIP contract,
+checks the latest default branch and repository-owned admission hooks, and
+publishes one verified tree and one single-parent commit. Selected bytes are sent
+from the bridge process directly to GitHub; they are never expanded into a chat
+message or connector argument. See
+[`docs/workspace-commit-bridge.md`](docs/workspace-commit-bridge.md).
+
 ## Contracts
 
 The public API, minimal state envelope, versioned report schema, timeout
-semantics, and compatibility rules are documented in
+semantics, commit handoff schema, and compatibility rules are documented in
 [`docs/contracts.md`](docs/contracts.md).
 
 The report stores a digest of the command template rather than raw arguments.
@@ -74,6 +99,8 @@ maintained in [`CHANGELOG.md`](CHANGELOG.md).
 PYTHONPATH=src python -m unittest discover -s tests -v
 PYTHONPATH=src python -m compileall -q src tests
 PYTHONPATH=src python -m production_harness.cli --help
+PYTHONPATH=src python -m production_harness.commit_bridge_cli --help
+PYTHONPATH=src python -m production_harness.commit_bridge_cli publish --help
 python -m pip wheel . --no-deps --no-build-isolation --wheel-dir dist
 python scripts/validate_installed_wheel.py
 ```
@@ -81,6 +108,6 @@ python scripts/validate_installed_wheel.py
 ## Scope boundary
 
 The public package owns generic state durability, retry policy, report contracts,
-and continuation control. A consuming project owns its workflow state machine,
-full task schema, quality gates, publication rules, repository integration, and
-domain adapters.
+continuation control, and fail-closed Git object publication. A consuming project
+owns its workflow state machine, checkpoint creation, changed-file selection,
+quality gates, repository policy, direct-dependency declarations, and credentials.
