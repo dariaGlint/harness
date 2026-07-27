@@ -93,7 +93,7 @@ jobs:
           PYTHONPATH: src
       - name: Compile package and tests
         if: always()
-        run: python -m compileall -q src tests
+        run: python -m compileall -q src tests examples scripts
         env:
           PYTHONPATH: src
       - name: Load CLI
@@ -101,3 +101,12 @@ jobs:
         run: python -m production_harness.cli --help
         env:
           PYTHONPATH: src
+      - name: Install packaging toolchain
+        if: always()
+        run: python -m pip install --disable-pip-version-check --no-input setuptools wheel
+      - name: Build wheel
+        if: always()
+        run: python -m pip wheel . --no-deps --no-build-isolation --wheel-dir dist
+      - name: Validate installed wheel as external consumer
+        if: always()
+        run: python scripts/validate_installed_wheel.py
