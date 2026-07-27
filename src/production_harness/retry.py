@@ -6,7 +6,12 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class RetryPolicy:
-    """Bounded retry policy with deterministic work-unit shrinking."""
+    """Bounded retry policy with deterministic work-unit shrinking.
+
+    ``max_attempts`` is the total number of allowed attempts, including the
+    initial attempt. ``completed_attempts`` passed to :meth:`can_retry` is the
+    number already consumed.
+    """
 
     max_attempts: int = 4
     shrink_factor: float = 0.5
@@ -21,9 +26,11 @@ class RetryPolicy:
             raise ValueError("minimum_chunk_size must be positive")
 
     def next_chunk_size(self, current_chunk_size: int) -> int:
-        """Shrink a failed unit while preserving a positive minimum."""
+        """Shrink a failed unit without ever increasing the current work size."""
         if current_chunk_size < 1:
             raise ValueError("current_chunk_size must be positive")
+        if current_chunk_size <= self.minimum_chunk_size:
+            return current_chunk_size
         reduced = int(current_chunk_size * self.shrink_factor)
         return max(self.minimum_chunk_size, min(current_chunk_size - 1, reduced))
 

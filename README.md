@@ -9,14 +9,15 @@ project-specific quality gates.
 
 ## Included in v0.1
 
-- atomic JSON state writes with file and directory `fsync`;
-- discovery of the latest unfinished task;
-- bounded foreground continuation for exit codes `10` and `40`;
-- process-group termination and durable-state timeout recovery;
-- fail-closed handling for unknown exit codes;
-- deterministic retry chunk shrinking;
-- a shell-free argument-vector command template;
-- unit tests that do not require Godot or a private repository.
+- atomic JSON state writes with file and directory `fsync` where supported;
+- validated discovery of the latest unfinished task;
+- bounded foreground continuation for configurable exit codes;
+- cross-platform process-group termination and durable-state timeout recovery;
+- fail-closed handling for invalid state and unknown exit codes;
+- deterministic retry chunk shrinking that never increases work;
+- a shell-free, strictly validated argument-vector command template;
+- versioned packaged JSON Schemas for task state and foreground reports;
+- Linux and Windows CI without Godot or private repository access.
 
 ## Library example
 
@@ -45,7 +46,17 @@ raise SystemExit(run_until_boundary(request))
 ```
 
 The command is executed directly without a shell. Supported placeholders are
-`{operation}`, `{task_id}`, and `{invocation_time_budget}`.
+`{operation}`, `{task_id}`, and `{invocation_time_budget}`. Formatting,
+conversions, attribute access, and other placeholders are rejected.
+
+## Contracts
+
+The public API, minimal state envelope, versioned report schema, timeout
+semantics, and compatibility rules are documented in
+[`docs/contracts.md`](docs/contracts.md).
+
+The report stores a digest of the command template rather than raw arguments.
+Any `next_command` supplied by a consumer must already be redacted.
 
 ## Development
 
@@ -57,6 +68,7 @@ PYTHONPATH=src python -m production_harness.cli --help
 
 ## Scope boundary
 
-The public package owns generic state durability, retry policy, and continuation
-control. A consuming project owns its workflow state machine, task schema,
-quality gates, publication rules, repository integration, and domain adapters.
+The public package owns generic state durability, retry policy, report contracts,
+and continuation control. A consuming project owns its workflow state machine,
+full task schema, quality gates, publication rules, repository integration, and
+domain adapters.

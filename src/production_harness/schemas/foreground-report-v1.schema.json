@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dariaGlint/harness/schemas/foreground-report-v1.schema.json",
+  "title": "Production Harness Foreground Report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "task_id",
+    "status",
+    "terminal_reason",
+    "last_exit_code",
+    "invocation_count",
+    "continuation_count",
+    "timed_out_count",
+    "outer_time_budget",
+    "invocation_time_budget",
+    "max_invocations",
+    "started_at",
+    "updated_at",
+    "elapsed_seconds",
+    "cwd",
+    "state_root",
+    "state_filename",
+    "state_machine_key",
+    "command_template_sha256",
+    "command_argument_count",
+    "invocations",
+    "next_command"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "task_id": {"type": "string", "minLength": 1},
+    "status": {"enum": ["running", "yielded", "terminal"]},
+    "terminal_reason": {"type": "string", "minLength": 1},
+    "last_exit_code": {"type": ["integer", "null"]},
+    "invocation_count": {"type": "integer", "minimum": 0},
+    "continuation_count": {"type": "integer", "minimum": 0},
+    "timed_out_count": {"type": "integer", "minimum": 0},
+    "outer_time_budget": {"type": "number", "exclusiveMinimum": 0},
+    "invocation_time_budget": {"type": "number", "exclusiveMinimum": 0},
+    "max_invocations": {"type": "integer", "minimum": 1},
+    "started_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"},
+    "elapsed_seconds": {"type": "number", "minimum": 0},
+    "cwd": {"type": "string", "minLength": 1},
+    "state_root": {"type": "string", "minLength": 1},
+    "state_filename": {"type": "string", "minLength": 1},
+    "state_machine_key": {"type": "string", "minLength": 1},
+    "command_template_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "command_argument_count": {"type": "integer", "minimum": 1},
+    "invocations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "index",
+          "operation",
+          "returncode",
+          "timed_out",
+          "invocation_time_budget",
+          "recorded_at"
+        ],
+        "properties": {
+          "index": {"type": "integer", "minimum": 1},
+          "operation": {"enum": ["start", "resume"]},
+          "returncode": {"type": "integer"},
+          "timed_out": {"type": "boolean"},
+          "invocation_time_budget": {"type": "number", "exclusiveMinimum": 0},
+          "recorded_at": {"type": "string", "format": "date-time"}
+        }
+      }
+    },
+    "next_command": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "array", "items": {"type": "string"}}
+      ]
+    }
+  }
+}

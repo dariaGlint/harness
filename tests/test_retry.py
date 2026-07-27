@@ -12,7 +12,13 @@ class RetryPolicyTests(unittest.TestCase):
         self.assertEqual(policy.next_chunk_size(2), 1)
         self.assertEqual(policy.next_chunk_size(1), 1)
 
-    def test_retry_bound(self) -> None:
+    def test_never_increases_work_when_current_is_below_configured_minimum(self) -> None:
+        policy = RetryPolicy(minimum_chunk_size=4)
+        self.assertEqual(policy.next_chunk_size(2), 2)
+        self.assertEqual(policy.next_chunk_size(4), 4)
+        self.assertEqual(policy.next_chunk_size(5), 4)
+
+    def test_retry_bound_includes_initial_attempt(self) -> None:
         policy = RetryPolicy(max_attempts=2)
         self.assertTrue(policy.can_retry(0))
         self.assertTrue(policy.can_retry(1))

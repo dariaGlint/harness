@@ -36,6 +36,7 @@ def _add_common(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--max-invocations", type=int, default=16)
     parser.add_argument("--reserve-seconds", type=float, default=1.5)
     parser.add_argument("--state-filename", default="state.json")
+    parser.add_argument("--state-machine-key", default="machine_state")
     parser.add_argument("--report", type=Path)
 
 
@@ -66,6 +67,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             reserve_seconds=args.reserve_seconds,
             report_path=args.report,
             state_filename=args.state_filename,
+            state_machine_key=args.state_machine_key,
         )
         return run_until_boundary(request)
     except (ForegroundSupervisorError, OSError, ValueError, subprocess.SubprocessError) as exc:
