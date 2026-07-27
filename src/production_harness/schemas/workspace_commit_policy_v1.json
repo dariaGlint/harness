@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dariaglint.github.io/production-harness/schemas/workspace_commit_policy_v1.json",
+  "title": "Workspace Commit Bridge repository policy v1",
+  "type": "object",
+  "required": ["schema_version", "allowed_branch_prefixes"],
+  "properties": {
+    "$schema": {"type": "string"},
+    "schema_version": {"const": 1},
+    "repository": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+    },
+    "allowed_branch_prefixes": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "/$"}
+    },
+    "forbid_default_branch_update": {"const": true},
+    "require_one_tree_one_commit": {"const": true},
+    "require_compare": {"const": true},
+    "require_latest_default_branch": {"const": true},
+    "reject_unexpected_archive_entries": {"const": true},
+    "reject_empty_files_unless_allowed": {"const": true},
+    "draft_pr_default": {"const": true},
+    "fail_closed_on_unexpected_files": {"const": true},
+    "player_experience_requires_preview": {"const": true},
+    "forbidden_prefixes": {"$ref": "#/$defs/stringArray"},
+    "forbidden_suffixes": {"$ref": "#/$defs/stringArray"},
+    "forbidden_basenames": {"$ref": "#/$defs/stringArray"},
+    "forbidden_patterns": {"$ref": "#/$defs/stringArray"},
+    "verification_artifact_patterns": {"$ref": "#/$defs/stringArray"},
+    "allowed_asset_patterns": {"$ref": "#/$defs/stringArray"},
+    "image_suffixes": {"$ref": "#/$defs/stringArray"},
+    "utf8_text_patterns": {"$ref": "#/$defs/stringArray"},
+    "required_handoff_fields": {"$ref": "#/$defs/stringArray"},
+    "admission": {
+      "type": "object",
+      "properties": {
+        "search_path": {"type": "string", "minLength": 1},
+        "issue_claim_factory": {"type": "string", "pattern": "^[^:]+:[^:]+$"},
+        "issue_claim_verify_method": {"type": "string", "minLength": 1},
+        "issue_claim_bind_method": {"type": "string", "minLength": 1},
+        "commit_message_callable": {"type": "string", "pattern": "^[^:]+:[^:]+$"},
+        "required_handoff_fields": {"$ref": "#/$defs/stringArray"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "stringArray": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}
