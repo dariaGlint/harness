@@ -14,7 +14,9 @@ The format follows Keep a Changelog, and this project uses Semantic Versioning.
 - exact file operation, digest, tree, commit, branch, and compare verification;
 - append-only Evidence Ledger library and CLI with canonical JSONL events;
 - packaged v1 Evidence Ledger event schema and installed-wheel validation;
-- trusted head snapshots for detecting complete trailing-record removal.
+- trusted head snapshots for detecting complete trailing-record removal;
+- deterministic Operational Acceptance contract, gate-result, report, and CLI APIs;
+- packaged v1 Operational Acceptance schemas and installed-wheel validation.
 
 ### Security
 
@@ -24,7 +26,9 @@ The format follows Keep a Changelog, and this project uses Semantic Versioning.
   unchanged;
 - default branches and unrelated existing work branches are never overwritten;
 - Evidence Ledger sequence, hash-chain, canonical encoding, lock, stale-writer,
-  symlink, evidence digest, and post-append rollback checks.
+  symlink, evidence digest, and post-append rollback checks;
+- Operational Acceptance contract/result/report digests, subject and contract
+  binding, duplicate/unexpected gate rejection, and required-evidence checks.
 
 ### Fixed
 

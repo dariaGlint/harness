@@ -23,6 +23,7 @@ classifiers = [
 production-harness = "production_harness.cli:main"
 workspace-commit-bridge = "production_harness.commit_bridge_cli:main"
 evidence-ledger = "production_harness.evidence_ledger_cli:main"
+operational-acceptance = "production_harness.operational_acceptance_cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

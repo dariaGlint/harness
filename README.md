@@ -19,6 +19,7 @@ project-specific quality gates.
 - versioned packaged JSON Schemas for task state and foreground reports;
 - checkpoint ZIP publication through one validated Git tree and one commit;
 - append-only, hash-chained evidence ledgers with external head anchors;
+- deterministic Operational Acceptance contracts and machine verdict reports;
 - Linux and Windows CI without Godot or private repository access.
 
 ## Library example
@@ -102,11 +103,40 @@ payload, actor, and optional external evidence files. A trusted head snapshot is
 required to detect deletion of complete trailing records or a fully recomputed
 ledger. See [`docs/evidence-ledger.md`](docs/evidence-ledger.md).
 
+## Operational Acceptance
+
+```python
+from production_harness import (
+    AcceptanceGate,
+    build_acceptance_contract,
+    build_gate_result,
+    evaluate_acceptance,
+)
+
+contract = build_acceptance_contract(
+    subject_id="task-123",
+    gates=[AcceptanceGate("compile"), AcceptanceGate("tests")],
+)
+results = [
+    build_gate_result(contract, gate_id="compile", status="pass", reason="compiled"),
+    build_gate_result(contract, gate_id="tests", status="pass", reason="tests passed"),
+]
+report = evaluate_acceptance(contract, results)
+assert report.conformance_status == "pass"
+assert report.task_verdict == "PASS"
+```
+
+The contract keeps workflow conformance separate from task outcome. Missing,
+blocked, or skipped required gates produce a conformant `BLOCKED` verdict;
+malformed, duplicate, unexpected, mismatched, or evidence-incomplete results are
+rejected. See
+[`docs/operational-acceptance.md`](docs/operational-acceptance.md).
+
 ## Contracts
 
-The public API, minimal state envelope, versioned report and evidence-ledger
-schemas, timeout semantics, commit handoff schema, and compatibility rules are
-documented in [`docs/contracts.md`](docs/contracts.md).
+The public API, minimal state envelope, versioned report, evidence-ledger, and
+Operational Acceptance schemas, timeout semantics, commit handoff schema, and
+compatibility rules are documented in [`docs/contracts.md`](docs/contracts.md).
 
 The report stores a digest of the command template rather than raw arguments.
 Any `next_command` supplied by a consumer must already be redacted.
@@ -116,7 +146,7 @@ Any `next_command` supplied by a consumer must already be redacted.
 `examples/consumer_fixture.py` is executed from an isolated virtual environment
 containing only the built wheel. The validation script rejects source-tree
 imports before exercising a real `start -> resume -> complete` flow and the
-installed Evidence Ledger API and packaged schema.
+installed Evidence Ledger and Operational Acceptance APIs and packaged schemas.
 
 Release publication steps are defined in
 [`docs/release-checklist.md`](docs/release-checklist.md), and release notes are
@@ -130,6 +160,7 @@ PYTHONPATH=src python -m compileall -q src tests
 PYTHONPATH=src python -m production_harness.cli --help
 PYTHONPATH=src python -m production_harness.commit_bridge_cli --help
 PYTHONPATH=src python -m production_harness.evidence_ledger_cli --help
+PYTHONPATH=src python -m production_harness.operational_acceptance_cli --help
 python -m pip wheel . --no-deps --no-build-isolation --wheel-dir dist
 python scripts/validate_installed_wheel.py
 ```
@@ -137,7 +168,8 @@ python scripts/validate_installed_wheel.py
 ## Scope boundary
 
 The public package owns generic state durability, retry policy, report contracts,
-continuation control, fail-closed Git object publication, and tamper-evident
-execution/evidence records. A consuming project owns its workflow state machine,
-checkpoint creation, changed-file selection, quality gates, repository policy,
-direct-dependency declarations, trust-anchor retention, and credentials.
+continuation control, fail-closed Git object publication, tamper-evident
+evidence records, and deterministic acceptance evaluation. A consuming project
+owns its workflow state machine, checkpoint creation, changed-file selection,
+gate definitions and execution, repository policy, direct-dependency
+declarations, trust-anchor retention, publication policy, and credentials.

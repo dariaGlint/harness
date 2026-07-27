@@ -15,6 +15,8 @@ Within v0.1 patch releases:
 - report schema version `1` remains readable;
 - Workspace Commit Bridge handoff schema version `1` remains readable;
 - Evidence Ledger event schema version `1` remains readable;
+- Operational Acceptance contract, gate-result, and report schema version `1`
+  remain readable;
 - exit-code defaults remain unchanged;
 - new optional fields and APIs may be added;
 - security and fail-closed corrections may reject state previously accepted by
@@ -114,6 +116,44 @@ The packaged `evidence-ledger-event-v1.schema.json` describes the event structur
 Runtime validation additionally enforces canonical JSON, cross-record sequence and
 hash continuity, one subject per ledger, sorted unique evidence references,
 resource limits, safe paths, and optional trusted-head/evidence verification.
+
+## Operational Acceptance contract
+
+Operational Acceptance uses three digest-bound objects with `schema_version: 1`:
+
+- a contract binding one subject to sorted, unique gate definitions and an
+  explicit verdict policy;
+- gate results binding the contract digest, subject, gate, status, reason,
+  evidence references, and result digest;
+- a report separating `conformance_status` from the task `PASS`, `FAIL`, or
+  `BLOCKED` verdict.
+
+Required gates that are missing, blocked, or skipped produce a conformant
+`BLOCKED` verdict. Required failures produce `FAIL`. Optional failures either
+produce `FAIL` or are ignored according to the contract's `failed_optional`
+policy. Optional missing, blocked, or skipped gates do not affect the verdict.
+
+Malformed contracts, digest mismatches, subject or contract mismatches, duplicate
+or unexpected results, disallowed statuses, and missing required evidence roles
+are rejected rather than represented as a report. Passing an evidence root also
+rehashes every `EvidenceReference` and rejects missing, changed, symlinked, unsafe,
+or non-regular files.
+
+A valid report always declares `conformance_status: pass`, including an expected
+fail-closed `BLOCKED` task outcome. Invalid input has no conformant report. The
+package does not execute gates or decide which project-specific gates are
+required; consumers own gate vocabulary, execution, authorization, and
+publication policy.
+
+Packaged schemas:
+
+- `operational-acceptance-contract-v1.schema.json`
+- `operational-acceptance-gate-result-v1.schema.json`
+- `operational-acceptance-report-v1.schema.json`
+
+Runtime validation additionally enforces canonical normalization, stable gate
+order, exact contract/result/report digests, result ordering, semantic report
+recomputation, and optional evidence-file verification.
 
 ## Timeout behavior
 
