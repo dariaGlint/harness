@@ -14,6 +14,7 @@ Within v0.1 patch releases:
 - existing exported call signatures will not remove parameters;
 - report schema version `1` remains readable;
 - Workspace Commit Bridge handoff schema version `1` remains readable;
+- Evidence Ledger event schema version `1` remains readable;
 - exit-code defaults remain unchanged;
 - new optional fields and APIs may be added;
 - security and fail-closed corrections may reject state previously accepted by
@@ -82,6 +83,37 @@ The packaged `workspace_commit_handoff_v1.json` and
 validation additionally enforces normalized paths, ZIP safety, resource limits,
 repository state, admission hooks, Draft-only PRs, and secret-free structured
 results.
+
+## Evidence Ledger contract
+
+An Evidence Ledger is canonical UTF-8 JSONL. Each event declares
+`schema_version: 1`, a sequence beginning at `1`, one stable `subject_id`, an
+RFC3339 UTC timestamp, an event type, an optional actor, a JSON-object payload,
+zero or more evidence references, the previous event hash, and its own SHA-256.
+
+The event hash covers every event field except `event_hash`. Evidence references
+bind a consumer-defined role, a normalized relative path, exact byte size, and
+SHA-256. Evidence files must be regular files beneath the declared evidence root;
+symlinks and files that change while hashing are rejected.
+
+Writers serialize through an exclusive filesystem lock, verify the entire ledger
+before append, reject stale expected sequence/hash values, durably append, and
+verify the new head. An append that cannot be verified is rolled back to the
+previous byte length where the filesystem permits it. A leftover lock is never
+silently broken; an operator must establish that no writer remains before removal.
+
+The hash chain detects modification, insertion, deletion from the middle,
+reordering, malformed encoding, and partial writes. It cannot by itself prove that
+a complete trailing event—or the entire ledger—was not removed and recomputed.
+Consumers requiring that guarantee must retain `event_count` and `last_hash` in a
+separate trusted report or attestation and verify against that anchor. The helper
+snapshot API provides this anchor format but does not make colocated storage
+independently trusted.
+
+The packaged `evidence-ledger-event-v1.schema.json` describes the event structure.
+Runtime validation additionally enforces canonical JSON, cross-record sequence and
+hash continuity, one subject per ledger, sorted unique evidence references,
+resource limits, safe paths, and optional trusted-head/evidence verification.
 
 ## Timeout behavior
 
