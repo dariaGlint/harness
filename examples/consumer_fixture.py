@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.resources
 import json
 import sys
 import tempfile
@@ -8,8 +9,10 @@ from pathlib import Path
 import production_harness
 from production_harness import (
     EXIT_COMPLETE,
+    HANDOFF_SCHEMA_VERSION,
     CommandTemplate,
     ForegroundRequest,
+    commit_checkpoint_to_github,
     run_until_boundary,
 )
 
@@ -68,6 +71,18 @@ def main() -> int:
     imported_path = Path(production_harness.__file__).resolve()
     if repository_root in imported_path.parents:
         raise RuntimeError(f"source-tree import detected: {imported_path}")
+    if HANDOFF_SCHEMA_VERSION != 1 or not callable(commit_checkpoint_to_github):
+        raise RuntimeError("Workspace Commit Bridge public API is unavailable")
+    schema_text = (
+        importlib.resources.files("production_harness.schemas")
+        .joinpath("workspace_commit_handoff_v1.json")
+        .read_text(encoding="utf-8")
+    )
+    schema = json.loads(schema_text)
+    if schema.get("$defs", {}).get("commitBridge", {}).get("properties", {}).get(
+        "schema_version", {}
+    ).get("const") != 1:
+        raise RuntimeError("Workspace Commit Bridge packaged schema is unavailable")
 
     with tempfile.TemporaryDirectory(prefix="production-harness-consumer-") as raw:
         root = Path(raw)

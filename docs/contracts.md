@@ -13,6 +13,7 @@ Within v0.1 patch releases:
 
 - existing exported call signatures will not remove parameters;
 - report schema version `1` remains readable;
+- Workspace Commit Bridge handoff schema version `1` remains readable;
 - exit-code defaults remain unchanged;
 - new optional fields and APIs may be added;
 - security and fail-closed corrections may reject state previously accepted by
@@ -53,6 +54,25 @@ contain credentials or private paths.
 `ForegroundRequest.next_command`, when supplied, is persisted verbatim on a
 yielded report. Consumers must pass an already redacted command containing no
 secrets.
+
+## Workspace commit handoff
+
+The supported machine contract is the `commit_bridge` object in `handoff.json`.
+It declares `schema_version: 1`, repository, base commit, optional ZIP workspace
+root, optional direct dependencies, and an exact `files` array.
+
+For `add` and `modify`, path, mode, byte size, SHA-256, and Git blob SHA are
+required. For `delete`, content fields are forbidden and the payload path must be
+absent from the ZIP. The request repository and base SHA must match the handoff.
+
+The bridge may move from the requested base to the latest default-branch commit
+only when each selected path and direct dependency resolves to the same remote
+object at both commits. The generated compare result must exactly match declared
+paths and operation statuses before the branch is changed.
+
+The packaged `workspace_commit_handoff_v1.json` schema describes the structural
+contract. Runtime validation adds path normalization, Unicode, ZIP safety,
+resource-limit, digest, remote-state, and branch-safety checks.
 
 ## Timeout behavior
 
